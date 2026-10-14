@@ -106,6 +106,10 @@ select.field{appearance:none;-webkit-appearance:none;background-image:linear-gra
 .judge button{flex:1;min-height:50px;border-radius:12px;font-weight:700;font-size:16px}
 .judge .y{background:var(--okbg);color:var(--ok);border:1.5px solid var(--ok)}
 .judge .n{background:var(--kobg);color:var(--ko);border:1.5px solid var(--ko)}
+.srcs{list-style:none;margin:0;padding:0}
+.srcs li{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.srcs a{color:var(--ac);text-decoration:none;font-weight:600}
+.srcs span{display:block;color:var(--mu2);font-size:12px}
 .srcnote{font-size:13px;color:var(--mid);background:var(--midbg);border-radius:10px;padding:8px 12px;margin:0 0 14px}
 
 /* Chargement */
@@ -335,7 +339,7 @@ body.on-home .brand{visibility:hidden}
       <div class="hero-t">Maïeutique</div>
       <div class="hero-by">by Alexandre HEZEZ</div>
     </div>
-    <p class="lead" style="text-align:center">Décrivez la leçon à vérifier : Maïeutique prépare un QCM corrigé et expliqué, avec une fiche résumé et une carte mentale si vous le souhaitez.</p>
+    <p class="lead" style="text-align:center">Choisissez le niveau, décrivez ce que vous voulez vérifier : Maïeutique trouve les sources et prépare une fiche, une carte mentale et un quiz de 20 questions noté sur 20.</p>
     <div class="card" id="activate" style="display:none;border-color:var(--ac)">
       <h3>Activer cet appareil</h3>
       <p class="small muted" style="margin:0 0 10px">Saisissez le code d'accès (une seule fois sur cet appareil).</p>
@@ -353,28 +357,11 @@ body.on-home .brand{visibility:hidden}
           <option value="Sup">Supérieur</option>
         </select>
     </div>
-    <div class="fl two">
-      <div><label for="f-sujet">Sujet de la leçon</label>
-        <input class="field" id="f-sujet" type="text" placeholder="ex. Les fractions" oninput="saveForm()"></div>
-      <div><label for="f-matiere">Matière <span class="opt-l">facultatif</span></label>
-        <input class="field" id="f-matiere" type="text" list="matieres" placeholder="ex. Histoire" oninput="saveForm()">
-        <datalist id="matieres"><option>Mathématiques</option><option>Français</option><option>Histoire</option><option>Géographie</option><option>SVT</option><option>Physique-chimie</option><option>Anglais</option><option>Espagnol</option><option>Allemand</option><option>Technologie</option><option>EMC</option><option>SES</option><option>Philosophie</option></datalist></div>
-    </div>
     <div class="fl">
-      <label for="f-lecon">Texte de la leçon <span class="opt-l">recommandé</span></label>
-      <textarea class="field ta" id="f-lecon" placeholder="Collez ou dictez la leçon telle qu'elle figure dans le cahier ou le manuel. Sans texte, le quiz s'appuie sur le programme officiel du niveau." oninput="saveForm()"></textarea>
+      <label for="f-demande">Le quiz souhaité</label>
+      <textarea class="field ta" id="f-demande" placeholder="ex. La Révolution française, de 1789 à la chute de Robespierre : surtout les dates clés et les grands personnages.&#10;&#10;Vous pouvez aussi coller ou dicter la leçon du cahier." oninput="saveForm()"></textarea>
       <div class="tarow"><button class="mic" id="mic" type="button" onclick="toggleDictee()"></button><span class="hint" id="lecon-n" style="margin:0"></span></div>
     </div>
-    <div class="fl">
-      <label for="f-consignes">Ce qu'il faut vérifier <span class="opt-l">facultatif</span></label>
-      <textarea class="field ta sm" id="f-consignes" placeholder="ex. Insister sur les dates et les personnages. Questions surtout de vocabulaire. Éviter la partie sur la Renaissance." oninput="saveForm()"></textarea>
-    </div>
-
-    <div class="fl"><label>Nombre de questions</label><div class="chips" id="c-count"></div></div>
-    <div class="fl"><label>Difficulté</label><div class="chips" id="c-diff"></div></div>
-    <div class="fl"><label>Qui répond ?</label><div class="chips" id="c-mode"></div><div class="hint" id="mode-h"></div></div>
-    <div class="fl"><label>En plus du quiz</label><div class="chips" id="c-extra"></div></div>
-
     <div class="err" id="home-err"></div>
   </section>
 
@@ -524,48 +511,32 @@ async function api(step, payload){
   return data;
 }
 function ctxPayload(notions){
-  return { matiere:S.matiere, niveau:S.niveau, titre:S.titre, contenu:S.contenu, source:S.source, consignes:S.consignes,
+  return { matiere:S.matiere, niveau:S.niveau, titre:S.titre, contenu:S.contenu, consignes:S.consignes,
            notions:(notions||S.notions).map(({id,label,resume})=>({id,label,resume})) };
 }
 
 /* =========================================================
    ACCUEIL : la demande du parent
    ========================================================= */
-const COUNTS = [10, 15, 20];
-const DIFFS = [["facile","Facile"],["standard","Standard"],["exigeant","Exigeant"]];
-const MODES = [["ecran","L'élève, sur l'écran"],["oral","Le parent, à l'oral"]];
-const MODE_HINT = {ecran:"L'élève touche sa réponse ; la correction et l'explication s'affichent aussitôt.",
-                   oral:"Vous lisez la question à voix haute. L'élève répond parmi les 4 choix, ou librement, et vous notez juste ou faux."};
-const EXTRAS = [["fiche","Fiche résumé"],["carte","Carte mentale"]];
-let form = store.get("form", {sujet:"", niveau:"6e", matiere:"", lecon:"", consignes:"", count:20, diff:"standard", mode:"ecran", fiche:true, carte:true});
-const LECON_MAX = 30000;
+const QUIZ_SIZE = 20;
+let form = store.get("form2", {niveau:"6e", demande:""});
+const LECON_MAX = 20000;
 
-function fillForm(){
-  $("f-sujet").value = form.sujet; $("f-niveau").value = form.niveau; $("f-matiere").value = form.matiere;
-  $("f-lecon").value = form.lecon; $("f-consignes").value = form.consignes;
-}
+function fillForm(){ $("f-niveau").value = form.niveau; $("f-demande").value = form.demande; }
 function saveForm(){
-  form.sujet = $("f-sujet").value; form.niveau = $("f-niveau").value; form.matiere = $("f-matiere").value;
-  form.lecon = $("f-lecon").value; form.consignes = $("f-consignes").value;
-  store.set("form", form); $("home-err").classList.remove("on"); renderChips();
+  form.niveau = $("f-niveau").value; form.demande = $("f-demande").value;
+  store.set("form2", form); $("home-err").classList.remove("on"); renderCount();
 }
-function setOpt(k, v){ form[k] = v; store.set("form", form); renderChips(); }
-function chip(on, label, js){ return `<button class="chip ${on?"on":""}" onclick="${js}">${label}</button>`; }
-function renderChips(){
-  $("c-count").innerHTML = COUNTS.map(n=>chip(form.count===n, n+" questions", `setOpt('count',${n})`)).join("");
-  $("c-diff").innerHTML = DIFFS.map(([k,l])=>chip(form.diff===k, l, `setOpt('diff','${k}')`)).join("");
-  $("c-mode").innerHTML = MODES.map(([k,l])=>chip(form.mode===k, l, `setOpt('mode','${k}')`)).join("");
-  $("mode-h").textContent = MODE_HINT[form.mode];
-  $("c-extra").innerHTML = EXTRAS.map(([k,l])=>chip(form[k], (form[k]?"✓ ":"")+l, `setOpt('${k}',${!form[k]})`)).join("");
-  const n = form.lecon.trim().length;
-  $("lecon-n").textContent = n ? `${n.toLocaleString("fr-FR")} caractères${n>LECON_MAX?" · trop long, seuls les "+LECON_MAX.toLocaleString("fr-FR")+" premiers seront lus":""}` : "";
+function renderCount(){
+  const n = form.demande.trim().length;
+  $("lecon-n").textContent = n > 400 ? `${n.toLocaleString("fr-FR")} caractères${n>LECON_MAX?" · trop long, seuls les "+LECON_MAX.toLocaleString("fr-FR")+" premiers seront lus":""}` : "";
   renderMic();
 }
 function renderHome(){
   const saved = store.get("seance", null);
   $("resume").innerHTML = saved && saved.titre
     ? `<div class="card"><div class="small muted">Leçon en cours</div><b>${esc(saved.titre)}</b><div class="row" style="margin-top:12px"><button class="btn sec" style="min-height:44px" onclick="dropSession()">Effacer</button><button class="btn pri" style="min-height:44px" onclick="resumeSession()">Reprendre</button></div></div>` : "";
-  fillForm(); renderChips();
+  fillForm(); renderCount();
   bar(`<button class="btn pri" onclick="startPreparer()">${DEMO_MODE?"Lancer la démonstration":"Préparer le quiz"}</button>`);
   if(!DEMO_MODE && (!cfg.url || !cfg.code)) $("activate").style.display = "block";
 }
@@ -578,16 +549,16 @@ function renderMic(){
   const m = $("mic");
   if(!SR){ m.style.display = "none"; if(!$("lecon-n").textContent) $("lecon-n").textContent = "Astuce : le micro du clavier permet de dicter."; return; }
   m.className = "mic" + (rec ? " rec" : "");
-  m.innerHTML = rec ? "Arrêter la dictée" : ICO_MIC + "Dicter la leçon";
+  m.innerHTML = rec ? "Arrêter la dictée" : ICO_MIC + "Dicter";
 }
 function toggleDictee(){
   if(rec){ rec.stop(); return; }
   rec = new SR(); rec.lang = "fr-FR"; rec.continuous = true; rec.interimResults = true;
-  recBase = $("f-lecon").value.replace(/\s*$/, ""); if(recBase) recBase += " ";
+  recBase = $("f-demande").value.replace(/\s*$/, ""); if(recBase) recBase += " ";
   rec.onresult = (e)=>{
     let fin = "", tmp = "";
     for(let i=0;i<e.results.length;i++){ const t = e.results[i][0].transcript; if(e.results[i].isFinal) fin += t; else tmp += t; }
-    $("f-lecon").value = recBase + fin + tmp; form.lecon = $("f-lecon").value;
+    $("f-demande").value = recBase + fin + tmp; form.demande = $("f-demande").value;
   };
   rec.onerror = (e)=>{ if(e.error==="not-allowed") showErr("L'accès au micro a été refusé. Autorisez-le dans les réglages du navigateur."); };
   rec.onend = ()=>{ rec = null; saveForm(); };
@@ -611,20 +582,18 @@ function newCourse(){ store.del("seance"); S = null; goHome(); }
 async function startPreparer(){
   if(rec) rec.stop();
   saveForm();
-  if(!DEMO_MODE && !form.sujet.trim() && !form.lecon.trim()){ showErr("Indiquez au moins le sujet de la leçon, ou collez son texte."); $("f-sujet").focus(); return; }
-  loading("Préparation de la leçon", form.lecon.trim() ? ["Lecture de la leçon…","Repérage des notions clés…","Encore quelques secondes…"] : ["Recherche du programme du niveau…","Repérage des notions clés…","Encore quelques secondes…"]);
+  if(!DEMO_MODE && form.demande.trim().length < 3){ showErr("Décrivez ce que le quiz doit vérifier."); $("f-demande").focus(); return; }
+  loading("Préparation de la leçon", ["Recherche des sources…","Vérification des faits…","Repérage des notions clés…","Encore quelques secondes…"]);
   try{
-    const d = await api("preparer", {sujet:form.sujet, niveau:form.niveau, matiere:form.matiere, lecon:form.lecon.slice(0, LECON_MAX), consignes:form.consignes});
+    const d = await api("preparer", {niveau:form.niveau, demande:form.demande.slice(0, LECON_MAX)});
     stopLoading();
     if(!d.exploitable){ goHome(); showErr(d.probleme); return; }
-    S = { matiere:d.matiere, niveau:form.niveau, titre:d.titre, contenu:d.contenu, source:d.source, consignes:form.consignes,
-          count:form.count, diff:form.diff, mode:form.mode, wantFiche:form.fiche, wantCarte:form.carte,
-          notions:d.notions.map(n=>({...n, on:true})), fiche:null, ficheTab:form.fiche ? "fiche" : "carte",
+    S = { matiere:d.matiere, niveau:form.niveau, titre:d.titre, contenu:d.contenu, sources:d.sources||[], consignes:form.demande.slice(0, 3000),
+          count:QUIZ_SIZE, diff:"standard", mode:"ecran", wantFiche:true, wantCarte:true,
+          notions:d.notions.map(n=>({...n, on:true})), fiche:null, ficheTab:"fiche",
           series:[], cur:null, asked:[], phase:"fiche" };
     save();
-    queueSeries();
-    if(hasFiche()){ fireFiche(); showFiche(); }
-    else { S.waitQuiz = true; loading("Préparation du quiz", [`Rédaction de ${S.count} questions…`,"Vérification des réponses…","Encore quelques secondes…"]); }
+    queueSeries(); fireFiche(); showFiche();
   }catch(err){
     goHome(); showErr(err.message);
     if(err.activate) $("activate").style.display = "block";
@@ -718,7 +687,13 @@ function showFiche(keepScroll){
 }
 const NIV_LABEL = {"2de":"Seconde","1re":"Première","Tle":"Terminale","Sup":"Supérieur"};
 const nivLabel = (n) => NIV_LABEL[n] || n || "";
-function srcNote(){ return S.source==="programme" ? `<div class="srcnote">Aucune leçon fournie : le contenu suit le programme officiel de ${esc(nivLabel(S.niveau))}. Il peut différer de ce qui a été vu en classe.</div>` : ""; }
+function srcNote(){ return ""; }
+function sourcesHTML(){
+  const src = S.sources || [];
+  if(!src.length) return "";
+  return `<div class="fsec">Sources</div><ul class="srcs">` + src.map(x=>{ let host = ""; try{ host = new URL(x.url).hostname.replace(/^www\./,""); }catch{}
+    return `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a><span>${esc(host)}</span></li>`; }).join("") + `</ul>`;
+}
 function ficheHTML(f){
   let h = `<div class="essentiel rich">${rich(f.essentiel)}</div>`;
   for(const n of S.notions){
@@ -728,7 +703,7 @@ function ficheHTML(f){
   const orphan = f.blocs.filter(b=>!S.notions.some(n=>n.id===b.notion_id));
   if(orphan.length) h += `<div class="fsec">Autres points</div>` + orphan.map(b=>`<div class="bloc"><div class="bt"><b>${esc(b.titre)}</b></div><div class="rich">${rich(b.contenu)}</div></div>`).join("");
   if(f.pieges.length) h += `<div class="fsec">Pièges classiques</div>` + f.pieges.map(p=>`<div class="piege"><div class="p rich">${rich(p.piege)}</div><div class="c rich">${rich(p.correction)}</div></div>`).join("");
-  return h;
+  return h + sourcesHTML();
 }
 
 /* =========================================================
@@ -1049,7 +1024,7 @@ async function demoApi(step, payload){
   if(step==="qcm"){ const ids = payload.notions.map(n=>n.id); return {questions: Array.from({length:payload.count}, (_,i)=>{ const q = demoQuestion(ids[i%ids.length]); const o = shuffle([0,1,2,3]); return {...q, choices:o.map(k=>q.choices[k]), answer_index:o.indexOf(0)}; })}; }
 }
 const DEMO = {
-  preparer:{exploitable:true, source:"lecon", matiere:"Mathématiques", titre:"Second degré : forme canonique et discriminant",
+  preparer:{exploitable:true, sources:[{url:"https://eduscol.education.gouv.fr/", title:"Programme de mathématiques de première (Éduscol)"}], matiere:"Mathématiques", titre:"Second degré : forme canonique et discriminant",
     contenu:"(démonstration)",
     notions:[
       {id:"n1", label:"Forme canonique", resume:"Écrire \\(f(x)=a(x-\\alpha)^2+\\beta\\) avec \\(\\alpha=-\\frac{b}{2a}\\) et \\(\\beta=f(\\alpha)\\)."},
