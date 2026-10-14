@@ -1,0 +1,8 @@
+name = "maieutique"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Secrets à définir dans Cloudflare (Settings > Variables and Secrets) :
+#   ANTHROPIC_API_KEY, ACCESS_CODE
+[vars]
+ALLOWED_ORIGIN = "https://alexhezez-prog.github.io"
